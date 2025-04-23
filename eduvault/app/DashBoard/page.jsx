@@ -244,20 +244,6 @@ const StatsSection = ({ section, userProfile }) => {
   };
 
   const statsConfig = {
-    Foodhub: [
-      {
-        label: "No. of Foods donated",
-        value: userProfile?.totalMealsShared || 0,
-        prefix: "",
-        className: "text-[#28a745]"
-      },
-      {
-        label: "Cumulative Donations",
-        value: userProfile?.totalDonations || "0",
-        prefix: "₹",
-        className: "text-[#28a745]"
-      }
-    ],
     "Learn&Share": [
       {
         label: "No. of Teachings",
@@ -295,16 +281,6 @@ const StatsSection = ({ section, userProfile }) => {
             </div>
           );
         }
-      }
-    ],
-    MarketPlace: [
-      {
-        label: "No. of Products sold",
-        value: userProfile?.totalMarketSold || 0
-      },
-      {
-        label: "Recent Sale",
-        value: userProfile?.recentMarketSold || "No Recent Data"
       }
     ]
   };
@@ -654,7 +630,7 @@ const DashBoard = () => {
               </div>
 
               <div className="flex flex-wrap justify-around bg-gray-200 text-black py-2 rounded-md">
-                {["Foodhub", "Learn&Share", "MarketPlace", "Progress"].map((section) => (
+                {["Learn&Share", "Progress"].map((section) => (
                   <button
                     key={section}
                     onClick={() => {
