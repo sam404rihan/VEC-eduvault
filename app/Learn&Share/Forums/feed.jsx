@@ -10,40 +10,41 @@ const PostPage = () => {
   const posts = [
     {
       id: 1,
-      title: "📚 The Future of Online Learning",
+      title: "📚 Completed: The Future of Online Learning",
       date: "April 23, 2025",
-      img: "https://source.unsplash.com/800x400/?online-learning",
-      desc: "Online learning is transforming education. What does the future hold for this mode of learning? Let's dive into trends and opportunities.",
+      img: "/images/cert.jpg",
+      desc: "Just wrapped up a deep dive into how online learning is reshaping education! 🚀 Excited about the trends and possibilities that lie ahead. #OnlineLearning #EdTech",
     },
     {
       id: 2,
-      title: "🧠 Critical Thinking Skills for Students",
+      title: "🧠 Course Completed: Critical Thinking Skills for Students",
       date: "March 20, 2025",
-      img: "https://source.unsplash.com/800x400/?critical-thinking",
-      desc: "Critical thinking is one of the most important skills. Here's how to develop and nurture it in classrooms.",
+      img: "/images/cert.jpg",
+      desc: "Finished an eye-opening course on building critical thinking in students. A must-have skill for the future! 🎯 #CriticalThinking #EducationMatters",
     },
     {
       id: 3,
-      title: "🌐 The Impact of AI in Education",
+      title: "🌐 Certification: The Impact of AI in Education",
       date: "February 11, 2025",
-      img: "https://source.unsplash.com/800x400/?ai-education",
-      desc: "AI is revolutionizing how we approach learning. Let's explore its impact on education.",
+      img: "/images/cert.jpg",
+      desc: "Explored how AI is revolutionizing learning environments and teaching methods. The future of education is intelligent! 🤖📚 #AIinEducation #LifelongLearning",
     },
     {
       id: 4,
-      title: "🎓 Value of Lifelong Learning",
+      title: "🎓 Lifelong Learning Achieved!",
       date: "January 4, 2025",
-      img: "https://source.unsplash.com/800x400/?lifelong-learning",
-      desc: "Lifelong learning is essential today. Here's why continuous education keeps us sharp and competitive.",
+      img: "/images/cert.jpg",
+      desc: "Proud to complete a module on the value of lifelong learning. Staying curious and committed to growth! 🌱 #LifelongLearning #NeverStopLearning",
     },
     {
       id: 5,
-      title: "💡 Innovative STEM Education Ideas",
+      title: "💡 Completed: Innovative STEM Education Ideas",
       date: "December 18, 2024",
-      img: "https://source.unsplash.com/800x400/?stem-education",
-      desc: "STEM education drives innovation. Let’s explore creative ways to teach science and tech.",
+      img: "/images/cert.jpg",
+      desc: "Wrapped up a course focused on fresh ways to approach STEM education. Innovation starts in the classroom! 🧪📐 #STEMEducation #InnovationInLearning",
     },
   ];
+  
 
   return (
     <div className="min-h-screen bg-[#f9f6f4] py-12 px-6 font-sans">

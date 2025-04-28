@@ -52,7 +52,7 @@ function Header() {
       <div className="lg:flex w-screen lg:justify-between h-7 items-center">
 
         <Link href="/">
-          <button className="h-11 lg:w-54 flex justify-center  md:h-11 w-44">
+          <button className="h-11 mt-12 lg:w-54 flex justify-center  md:h-44 w-52">
             <Image src={img} alt="logo" width={150} height={50} />
           </button>
         </Link>

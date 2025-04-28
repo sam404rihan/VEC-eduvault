@@ -89,7 +89,7 @@ function Header() {
         </div>
 
         <Link href="/">
-          <button className="h-11 lg:w-54 lg:ml-20 flex justify-center md:h-11 w-44">
+          <button className="h-11 lg:w-54 lg:ml-20 flex justify-center md:h-44 mt-12 w-44">
             <Image src={img} alt="logo" width={150} height={50} />
           </button>
         </Link>
