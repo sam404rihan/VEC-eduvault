@@ -214,81 +214,57 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen font-sans">
-      {/* Hero Section */}
-      <header className="py-16 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="md:w-1/2 text-center md:text-left">
-              <h1 className="text-3xl md:text-4xl font-bold mb-4 text-black leading-tight">
-                "Unlock Your Learning <br/>
-                <span className="md:ml-48">Potential Today"</span>
-              </h1>
-              <p className="text-black mb-8 max-w-lg">
-                Explore a world of knowledge, master new skills, and achieve your academic goals with expert guidance and interactive resources designed for you.
-              </p>
-              <Link href="/Learn&Share/Learn/Classes">
-                <button className="border border-black text-black px-6 py-2 hover:bg-white hover:text-black transition duration-200 text-sm md:text-base">
-                  Get Involved
-                </button>
-              </Link>
-            </div>
-            <div className="md:w-1/2 flex justify-center md:justify-end">
-              <div className="relative w-80 md:w-96">
-                <Image 
-                  src="/images/Learn.png" 
-                  alt="Books and study materials" 
-                  width={370}
-                  height={250}
-                  className="rounded-lg shadow-lg"
-                />
-              </div>
-            </div>
-          </div>
+    <div className="text-white min-h-screen p-6 font-sans">
+      <header className="flex flex-col md:flex-row items-center justify-center md:justify-between mb-16">
+        <div className="md:ml-[180px] mt-10 md:w-1/2 mb-8 md:mb-0">
+          <p className="text-3xl md:text-4xl w-fit font-bold mb-4 text-black">
+            "Unlock Your Learning <br/><span className='ml-0 lg:ml-48'>Potential Today"</span>
+          </p>
+          <p className="text-base md:text-lg mb-6 text-black">
+            Explore a world of knowledge, master new skills, and achieve your academic goals with expert guidance and interactive resources designed for you.
+          </p>
+          <Link href="/Learn&Share/Learn/Classes">
+            <button className="border border-black text-black px-6 py-2 hover:bg-white hover:text-black transition duration-200 text-sm md:text-base">
+              Get Involved
+            </button>
+          </Link>
+        </div>
+        <div className="md:w-1/3 mt-8 md:mt-0">
+          <Image src="/images/Learn.png" alt="Books and study materials" width={370} height={250} className="rounded-lg shadow-lg mx-auto" />
         </div>
       </header>
 
-      {/* Classes Section */}
-      <section className="text-center px-4">
-        <div className="container mx-auto max-w-6xl">
-          <h2 className="text-xl md:text-2xl mb-4 text-black">
-            Explore our platform to gain knowledge and enhance your skills.
-          </h2>
-          
-          {/* Tabs */}
-          <nav className="flex justify-center space-x-6 mb-8 text-gray-400">
-            {['recent', 'upcoming', 'premium'].map((tab) => (
-              <button 
-                key={tab}
-                onClick={() => handleTabChange(tab)}
-                className={`pb-1 border-b-2 capitalize ${
-                  activeTab === tab 
-                    ? 'text-black border-red-500' 
-                    : 'border-transparent hover:text-black'
-                } transition-all ease-out duration-500`}
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
+      <section className="text-center">
+        <h2 className="text-xl md:text-2xl mb-4 text-black">
+          Explore our platform to gain knowledge and enhance your skills.
+        </h2>
+        <nav className="flex justify-center space-x-6 mb-8 text-gray-400">
+          {['recent', 'upcoming', 'premium'].map((tab) => (
+            <button 
+              key={tab}
+              onClick={() => handleTabChange(tab)}
+              className={`pb-1 border-b-2 capitalize ${
+                activeTab === tab 
+                  ? 'text-black border-red-500' 
+                  : 'border-transparent hover:text-black'
+              } transition-all ease-out duration-500`}
+            >
+              {tab}
+            </button>
+          ))}
+        </nav>
 
-          {/* Classes Grid */}
-          {loading ? (
-            <div className="flex justify-center items-center h-[13em]">
-              <Loader />
-            </div>
-          ) : filteredClasses.length === 0 ? (
-            <div className="text-center py-12 text-gray-600">
-              No classes available in this category.
-            </div>
-          ) : (
-            <div className="flex flex-wrap justify-center gap-6">
-              {filteredClasses.map((classData) => (
-                <ClassCard key={classData.id} classData={classData} />
-              ))}
-            </div>
-          )}
-        </div>
+        {loading ? (
+          <div className="flex justify-center items-center h-[13em]">
+            <Loader />
+          </div>
+        ) : (
+          <div className="flex flex-wrap justify-center gap-6">
+            {filteredClasses.map((classData) => (
+              <ClassCard key={classData.id} classData={classData} />
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

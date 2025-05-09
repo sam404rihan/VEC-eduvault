@@ -1,674 +1,761 @@
-"use client"
-import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { doc, getDoc, getFirestore, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+"use client";
+import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';   
+import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, arrayUnion } from 'firebase/firestore';
 import {firebaseApp} from '../../../../firebaseConfig';
-import styled from 'styled-components';
-import { getAuth } from 'firebase/auth';
-import Image from 'next/image';
-import { Calendar, Users, Star, Clock, Mail, MessageSquare, Heart, Award, Clock3, BookOpen, Target } from 'lucide-react';
-import ReactStars from 'react-stars'
-import Loader from './loader';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
 
-const ClassDetail = () => {
-  const [user, setUser] = useState(null);
-  const auth = getAuth(firebaseApp);
-  const router = useRouter();
-  const path = usePathname();
-  const classId = path.split('/').pop();
-  const [classData, setClassData] = useState(null);
-  const [proctorData, setProctorData] = useState(null);
-  const [interestedCount, setInterestedCount] = useState(0);
-  const [isInterested, setIsInterested] = useState(false);
-  const db = getFirestore(firebaseApp);
+const ClassesEntry = () => {
+    const router = useRouter();
+    const auth = getAuth(firebaseApp);
+    const db = getFirestore(firebaseApp);
 
-  const [rating, setRating] = useState({
-    userRating: 0,
-    averageRating: 0,
-    isSubmitting: false
-  });
-
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(user => {
-      if (user) {
-        setUser(user);
-      } else {
-        setUser(null);
-      }
+    const [user, setUser] = useState(null);
+    const [userType, setUserType] = useState(null);
+    const [activeSection, setActiveSection] = useState(1);
+    const [formData, setFormData] = useState({
+        className: '',
+        standard: '',
+        classType: '',
+        classDate: '',
+        classTime: '',
+        imageUrl: '',
+        description: '',
+        classLink: '',
+        minimumRequirements: [],
+        whatYouWillLearn: [],
+        isPremium: false,
     });
+    const [submitted, setSubmitted] = useState(false);
+    const [cloudinaryLoaded, setCloudinaryLoaded] = useState(false);
+    const [minRequirement, setMinRequirement] = useState('');
+    const [learningPoint, setLearningPoint] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [previewMode, setPreviewMode] = useState(false);
 
-    return () => unsubscribe();
-  }, [auth]);
-
-  useEffect(() => {
-    const fetchClassData = async () => {
-      if (classId && user) {
-        const classRef = doc(db, 'classesCollection', classId);
-        const docSnap = await getDoc(classRef);
-
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setClassData(data);
-          setInterestedCount(data.interestedUsers?.length || 0);
-          setIsInterested(data.interestedUsers?.includes(user.uid) || false);
-
-          if (data.procterId) {
-            const proctorRef = doc(db, 'users', data.procterId);
-            const proctorSnap = await getDoc(proctorRef);
-            
-            if (proctorSnap.exists()) {
-              const proctorInfo = proctorSnap.data();
-              setProctorData(proctorInfo);
-
-              if (proctorInfo.ratings) {
-                const ratings = Object.values(proctorInfo.ratings);
-                const avg = ratings.length > 0 
-                  ? ratings.reduce((a, b) => a + b, 0) / ratings.length 
-                  : 0;
-                
-                setRating({
-                  userRating: proctorInfo.ratings[user.uid] || 0,
-                  averageRating: Number(avg.toFixed(1)),
-                  isSubmitting: false
-                });
-              }
-            }
-          }
-        } else {
-          router.push('/404');
-        }
-      }
+    // Color theme
+    const colors = {
+        primary: "from-purple-600 to-indigo-600",
+        secondary: "from-pink-500 to-rose-500",
+        accent: "bg-amber-400",
+        background: "bg-gradient-to-br from-slate-50 to-slate-100"
     };
 
-    fetchClassData();
-  }, [classId, db, router, user]);
-
-
-  const handleCheckboxChange = async () => {
-    if (!user) {
-      alert("Please log in to show your interest!");
-      return;
-    }
-
-    const newInterestedState = !isInterested;
-    const classRef = doc(db, 'classesCollection', classId);
-    const userRef = doc(db, "users", user.uid);
-
-    try {
-      if (newInterestedState) {
-        await updateDoc(classRef, {
-          interestedUsers: arrayUnion(user.uid)
-        });
-        setInterestedCount(prevCount => prevCount + 1);
-          
-      
-
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          const currentDate = new Date().toDateString();
-          const userData = userDoc.data();
-          let dailyBalance = userData.dailyBalance || 0;
-          let balance = userData.balance || 0;
-          const lastUpdated = userData.lastUpdated || null;
-
-          if (lastUpdated !== currentDate) {
-            dailyBalance = 0;
-          }
-           
-
-          const checkboxHistory = userData.checkboxHistory || {};
-          if (!checkboxHistory[classId]) {
-            if (dailyBalance < 250) {
-              const remainingBalance = 250 - dailyBalance;
-              const increment = Math.min(10, remainingBalance);
-              dailyBalance += increment;
-              balance += increment;
-  
-              await updateDoc(userRef, {
-                dailyBalance,
-                balance,
-                lastUpdated: currentDate,
-                checkboxHistory: {
-                  ...checkboxHistory,
-                  [classId]: true,
-                },
-              });
-            }
-          }
-        }
-  
-      } else {
-        await updateDoc(classRef, {
-          interestedUsers: arrayRemove(user.uid)
-        });
-        setInterestedCount(prevCount => prevCount - 1);
-      }
-  
-      setIsInterested(newInterestedState);
-
-    } catch (error) {
-      console.error("Error updating Firestore:", error);
-      setIsInterested(!newInterestedState);
-    }
-  };
-
-  const handleRatingChange = async (newRating) => {
-    if (!user) {
-      alert("Please log in to rate the proctor!");
-      return;
-    }
-
-    if (!proctorData || !classData?.procterId) {
-      console.error("Missing proctor data or ID");
-      return;
-    }
-
-    setRating(prev => ({ ...prev, isSubmitting: true }));
-
-    try {
-      const proctorRef = doc(db, 'users', classData.procterId);
-      const proctorSnap = await getDoc(proctorRef);
-      
-      if (!proctorSnap.exists()) {
-        throw new Error("Proctor document not found");
-      }
-
-      const currentRatings = proctorSnap.data().ratings || {};
-      const newRatings = {
-        ...currentRatings,
-        [user.uid]: newRating
-      };
-
-      const ratingsArray = Object.values(newRatings);
-      const newAverage = ratingsArray.reduce((a, b) => a + b, 0) / ratingsArray.length;
-
-      await updateDoc(proctorRef, {
-        ratings: newRatings,
-        averageRating: newAverage
-      });
-
-      setRating({
-        userRating: newRating,
-        averageRating: Number(newAverage.toFixed(1)),
-        isSubmitting: false
-      });
-
-      alert("Rating submitted successfully!");
-    } catch (error) {
-      console.error("Error submitting rating:", error);
-      alert("Failed to submit rating. Please try again.");
-    } finally {
-      setRating(prev => ({ ...prev, isSubmitting: false }));
-    }
-  };
-
-  const ProctorCard = ({ proctorData, db, user, classData }) => {
-    const [ratingState, setRatingState] = useState({
-      userRating: 0,
-      averageRating: 0,
-      isSubmitting: false
-    });
-  
     useEffect(() => {
-      if (proctorData?.ratings) {
-        const ratings = Object.values(proctorData.ratings);
-        const avg = ratings.length > 0 
-          ? ratings.reduce((a, b) => a + b, 0) / ratings.length 
-          : 0;
-        
-        setRatingState({
-          userRating: user && proctorData.ratings[user?.uid] ? proctorData.ratings[user.uid] : 0,
-          averageRating: Number(avg.toFixed(1)),
-          isSubmitting: false
-        });
-      }
-    }, [proctorData, user]);
-  
-    const handleRatingSubmit = async (newRating) => {
-      if (!user) {
-        alert("Please log in to rate the proctor!");
-        return;
-      }
-  
-      if (!proctorData || !classData?.procterId) {
-        console.error("Missing proctor data or ID");
-        return;
-      }
-  
-      setRatingState(prev => ({ ...prev, isSubmitting: true }));
-  
-      try {
-        const proctorRef = doc(db, 'users', classData.procterId);
-        const proctorSnap = await getDoc(proctorRef);
-        
-        if (!proctorSnap.exists()) {
-          throw new Error("Proctor document not found");
+        if (!window.cloudinary) {
+            const script = document.createElement("script");
+            script.src = "https://upload-widget.cloudinary.com/global/all.js";
+            script.async = true;
+            script.onload = () => setCloudinaryLoaded(true);
+            document.body.appendChild(script);
+        } else {
+            setCloudinaryLoaded(true);
         }
-  
-        const currentRatings = proctorSnap.data().ratings || {};
-        const newRatings = {
-          ...currentRatings,
-          [user.uid]: newRating
-        };
-  
-        const ratingsArray = Object.values(newRatings);
-        const newAverage = ratingsArray.reduce((a, b) => a + b, 0) / ratingsArray.length;
-  
-        await updateDoc(proctorRef, {
-          ratings: newRatings,
-          averageRating: newAverage
+
+        onAuthStateChanged(auth, async (currentUser) => {
+            if (!currentUser) {
+                router.push('/Login');
+            } else {
+                setUser(currentUser);
+                setFormData(prev => ({ ...prev, procterId: currentUser.uid }));
+                
+                const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+                if (userDoc.exists()) {
+                    setUserType(userDoc.data().type);
+                }
+            }
         });
-  
-        if (classData.id) {
-          const classRef = doc(db, 'classesCollection', classData.id);
-          await updateDoc(classRef, {
-            proctorRating: newAverage
-          });
-        }
-  
-        setRatingState({
-          userRating: newRating,
-          averageRating: Number(newAverage.toFixed(1)),
-          isSubmitting: false
-        });
-  
-      } catch (error) {
-        console.error("Error submitting rating:", error);
-        alert("Failed to submit rating. Please try again.");
-        setRatingState(prev => ({ ...prev, isSubmitting: false }));
-      }
+    }, [auth, router, db]);
+
+    const handleChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        const newValue = type === 'checkbox' ? checked : value;
+        setFormData((prev) => ({ ...prev, [name]: newValue }));
     };
-  
-    if (!proctorData) return null;
-  
-    return (
-      <div className="font-['Poppins'] w-full max-w-4xl mx-auto mt-16 mb-12">
-        <h1 className="text-3xl font-bold mb-8 text-gray-800 flex items-center gap-3">
-          <Award className="w-7 h-7 text-amber-500" />
-          Meet Your Proctor
-        </h1>
-        
-        <div className="bg-white rounded-3xl shadow-xl p-8 transition-all duration-300 hover:shadow-2xl border border-amber-100">
-          {/* Header Section */}
-          <div className="flex flex-col md:flex-row items-start md:items-center gap-8 mb-8 pb-8 border-b border-amber-100">
-            <div className="relative">
-              <div className="w-36 h-36 rounded-2xl overflow-hidden ring-4 ring-amber-100 shadow-lg transform transition-all duration-300 hover:scale-105">
-                <Image 
-                  src={proctorData.profilePic || '/deaf.png'} 
-                  alt="Proctor Image" 
-                  width={144}
-                  height={144}
-                  className="object-cover w-full h-full"
-                  onError={(e) => {e.currentTarget.src = '/deaf.png'}}
-                />
-              </div>
-            </div>
-            
-            <div className="flex-grow">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between w-full">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-800 mb-2">
-                    {proctorData.firstName} {proctorData.lastName}
-                  </h2>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="px-4 py-1.5 bg-amber-100 text-amber-700 rounded-full text-sm font-medium">
-                      {proctorData.type}
-                    </span>
-                    {ratingState.averageRating > 0 && (
-                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium flex items-center gap-1">
-                        <Star className="w-3.5 h-3.5 fill-current" /> 
-                        {ratingState.averageRating.toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <button className="mt-4 md:mt-0 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-6 py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2 shadow-md font-medium transform hover:translate-y-[-2px]">
-                  <MessageSquare className="w-5 h-5" />
-                  <span>Join Class</span>
-                </button>
-              </div>
-            </div>
-          </div>
-  
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">            
-            <div className="bg-amber-50 rounded-xl p-5 transition-all duration-200 hover:bg-amber-100 shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
-                <Calendar className="w-5 h-5 text-amber-600" />
-                <span className="text-gray-600 font-medium">Classes Completed</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-800">{proctorData.numberOfTeaching || '0'}</p>
-            </div> 
-            
-            <div className="bg-amber-50 rounded-xl p-5 transition-all duration-200 hover:bg-amber-100 shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
-                <Star className="w-5 h-5 text-amber-600" />
-                <span className="text-gray-600 font-medium">Rating</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-2xl font-bold text-gray-800">{ratingState.averageRating}</p>
-                  <ReactStars
-                    count={5}
-                    value={ratingState.averageRating}
-                    size={24}
-                    color2={'#f59e0b'}
-                    edit={false}
-                    half={true}
-                  />
-                </div>
-                {user && (
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-600 mb-1">Your Rating:</p>
-                    <ReactStars
-                      count={5}
-                      onChange={handleRatingSubmit}
-                      size={24}
-                      value={ratingState.userRating}
-                      half={true}
-                      color2={'#f59e0b'}
-                      disabled={ratingState.isSubmitting}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
 
-            <div className="bg-amber-50 rounded-xl p-5 transition-all duration-200 hover:bg-amber-100 shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
-                <Users className="w-5 h-5 text-amber-600" />
-                <span className="text-gray-600 font-medium">Students Taught</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-800">{proctorData.studentsCount || '250+'}</p>
+    const handleImageUpload = () => {
+        if (cloudinaryLoaded && window.cloudinary) {
+            window.cloudinary.openUploadWidget(
+                {
+                    cloudName: "dwkxh75ux",
+                    uploadPreset: "sharepics",
+                    sources: ["local", "url", "camera"],
+                    cropping: true,
+                    multiple: false,
+                    resourceType: "image",
+                },
+                (error, result) => {
+                    if (!error && result && result.event === "success") {
+                        setFormData((prev) => ({
+                            ...prev,
+                            imageUrl: result.info.secure_url,
+                        }));
+                    } else if (error) {
+                        console.log("Upload error:", error);
+                    }
+                }
+            );
+        } else {
+            console.log("Cloudinary is not loaded yet.");
+        }
+    };
+
+    const handleRequirementAdd = () => {
+        if (minRequirement) {
+            setFormData((prev) => ({
+                ...prev,
+                minimumRequirements: [...prev.minimumRequirements, minRequirement],
+            }));
+            setMinRequirement('');
+        }
+    };
+
+    const handleLearningAdd = () => {
+        if (learningPoint) {
+            setFormData((prev) => ({
+                ...prev,
+                whatYouWillLearn: [...prev.whatYouWillLearn, learningPoint],
+            }));
+            setLearningPoint('');
+        }
+    };
+
+    const handleRequirementDelete = async (item) => {
+        try {
+            const updatedRequirements = formData.minimumRequirements.filter((req) => req !== item);
+            setFormData((prev) => ({
+                ...prev,
+                minimumRequirements: updatedRequirements,
+            }));
+        } catch (error) {
+            console.error("Error removing requirement:", error);
+            setError("Error removing requirement");
+        }
+    };
+
+    const handleLearningDelete = async (item) => {
+        try {
+            const updatedLearning = formData.whatYouWillLearn.filter((learn) => learn !== item);
+            setFormData((prev) => ({
+                ...prev,
+                whatYouWillLearn: updatedLearning,
+            }));
+        } catch (error) {
+            console.error("Error removing learning point:", error);
+            setError("Error removing learning point");
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!user) return;
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const classDoc = await addDoc(collection(db, 'classesCollection'), formData);
+
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDocSnap = await getDoc(userDocRef);
+
+            if (userDocSnap.exists()) {
+                const currentDate = new Date();
+                const dateString = currentDate.toDateString();
+                const timestamp = currentDate.toISOString();
+                
+                const userData = userDocSnap.data();
+                let dailyBalance = userData.dailyBalance || 0;
+                let balance = userData.balance || 0;
+                let numberOfTeaching = userData.numberOfTeaching || 0;
+                const lastUpdated = userData.lastUpdated || null;
+
+                if (lastUpdated !== dateString) {
+                    dailyBalance = 0;
+                }
+
+                let increment = Math.min(50, 250 - dailyBalance);
+                if (increment > 0) {
+                    dailyBalance += increment;
+                    balance += increment;
+                }
+
+                const balanceEntry = {
+                    date: timestamp,
+                    balance: balance,
+                    change: increment,
+                    type: 'class_creation'
+                };
+
+                const teachingEntry = {
+                    date: formData.classDate,
+                    title: formData.className,
+                    classId: classDoc.id
+                };
+
+                await updateDoc(userDocRef, {
+                    dailyBalance,
+                    balance,
+                    lastUpdated: dateString,
+                    balanceHistory: arrayUnion(balanceEntry),
+                    numberOfTeaching: numberOfTeaching + 1,
+                    recentTeaching: arrayUnion(teachingEntry)
+                });
+            }
+            setSubmitted(true);
+        } catch (error) {
+            console.error("Error saving class data:", error);
+            setError("Error saving class data");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const validateSection = (section) => {
+        switch(section) {
+            case 1:
+                return formData.className && formData.standard && formData.classType;
+            case 2:
+                return formData.classDate && formData.classTime && formData.classLink;
+            case 3:
+                return formData.description && formData.description.length > 10;
+            default:
+                return true;
+        }
+    };
+
+    const nextSection = () => {
+        if (validateSection(activeSection)) {
+            setActiveSection(prev => Math.min(prev + 1, 4));
+        }
+    };
+
+    const prevSection = () => {
+        setActiveSection(prev => Math.max(prev - 1, 1));
+    };
+
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+    };
+
+    const renderSection = () => {
+        switch(activeSection) {
+            case 1:
+                return (
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="space-y-6"
+                    >
+                        <h2 className="text-2xl font-bold text-gray-800 mb-8">Basic Information</h2>
+                        
+                        <div className="relative group">
+                            <input
+                                type="text"
+                                name="className"
+                                value={formData.className}
+                                onChange={handleChange}
+                                required
+                                placeholder=" "
+                                className="w-full p-4 border-b-2 border-gray-300 focus:border-indigo-600 outline-none transition-all bg-transparent text-lg"
+                            />
+                            <label className="absolute left-0 top-4 text-gray-500 transition-all duration-300 pointer-events-none group-focus-within:text-xs group-focus-within:-top-0 transform group-focus-within:text-indigo-600" 
+                                style={{
+                                    transform: formData.className ? 'translateY(-24px) scale(0.75)' : '',
+                                    color: formData.className ? '#4F46E5' : ''
+                                }}
+                            >
+                                Class Name
+                            </label>
+                        </div>
+
+                        <div className="relative group">
+                            <input
+                                type="text"
+                                name="standard"
+                                value={formData.standard}
+                                onChange={handleChange}
+                                required
+                                placeholder=" "
+                                className="w-full p-4 border-b-2 border-gray-300 focus:border-indigo-600 outline-none transition-all bg-transparent text-lg"
+                            />
+                            <label className="absolute left-0 top-4 text-gray-500 transition-all duration-300 pointer-events-none group-focus-within:text-xs group-focus-within:-top-0 transform group-focus-within:text-indigo-600" 
+                                style={{
+                                    transform: formData.standard ? 'translateY(-24px) scale(0.75)' : '',
+                                    color: formData.standard ? '#4F46E5' : ''
+                                }}
+                            >
+                                Age Group
+                            </label>
+                        </div>
+
+                        <div className="relative group">
+                            <input
+                                type="text"
+                                name="classType"
+                                value={formData.classType}
+                                onChange={handleChange}
+                                required
+                                placeholder=" "
+                                className="w-full p-4 border-b-2 border-gray-300 focus:border-indigo-600 outline-none transition-all bg-transparent text-lg"
+                            />
+                            <label className="absolute left-0 top-4 text-gray-500 transition-all duration-300 pointer-events-none group-focus-within:text-xs group-focus-within:-top-0 transform group-focus-within:text-indigo-600" 
+                                style={{
+                                    transform: formData.classType ? 'translateY(-24px) scale(0.75)' : '',
+                                    color: formData.classType ? '#4F46E5' : ''
+                                }}
+                            >
+                                Class Type
+                            </label>
+                        </div>
+
+                        {(userType === "Teacher" || userType === "Professional") && (
+                            <div className="flex items-center space-x-3 p-4 border-2 border-dashed border-indigo-200 rounded-xl bg-indigo-50">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox"
+                                        name="isPremium"
+                                        checked={formData.isPremium}
+                                        onChange={handleChange}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                    <span className="ml-3 text-gray-700 font-medium">Premium Class</span>
+                                </label>
+                                {formData.isPremium && (
+                                    <span className="ml-2 py-1 px-3 text-xs font-bold bg-amber-400 text-amber-900 rounded-full">
+                                        Premium Only
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    </motion.div>
+                );
+            case 2:
+                return (
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="space-y-6"
+                    >
+                        <h2 className="text-2xl font-bold text-gray-800 mb-8">Schedule & Access</h2>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="relative group">
+                                <label className="block text-gray-600 font-medium mb-1">Class Date:</label>
+                                <input
+                                    type="date"
+                                    name="classDate"
+                                    value={formData.classDate}
+                                    onChange={handleChange}
+                                    required
+                                    className="w-full p-3 border-2 border-gray-300 rounded-xl focus:border-indigo-600 focus:ring focus:ring-indigo-200 outline-none transition-all"
+                                />
+                            </div>
+                            
+                            <div className="relative group">
+                                <label className="block text-gray-600 font-medium mb-1">Class Time:</label>
+                                <input
+                                    type="time"
+                                    name="classTime"
+                                    value={formData.classTime}
+                                    onChange={handleChange}
+                                    required
+                                    className="w-full p-3 border-2 border-gray-300 rounded-xl focus:border-indigo-600 focus:ring focus:ring-indigo-200 outline-none transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="relative group p-4 border-2 border-dashed border-indigo-200 rounded-xl bg-indigo-50">
+                            <label className="block text-gray-700 font-medium mb-2">
+                                <span className="flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                    </svg>
+                                    Virtual Meeting Link:
+                                </span>
+                            </label>
+                            <input
+                                type="text"
+                                name="classLink"
+                                value={formData.classLink}
+                                onChange={handleChange}
+                                placeholder="Enter Google Meet URL"
+                                className="w-full p-3 border-2 border-gray-300 rounded-xl focus:border-indigo-600 focus:ring focus:ring-indigo-200 outline-none transition-all"
+                            />
+                            <p className="text-xs text-gray-500 mt-2">
+                                Provide a link where students can join your virtual class session
+                            </p>
+                        </div>
+
+                        <div className="mt-6">
+                            <div onClick={handleImageUpload} className="cursor-pointer">
+                                {formData.imageUrl ? (
+                                    <div className="relative">
+                                        <img
+                                            src={formData.imageUrl}
+                                            alt="Class Image"
+                                            className="w-full h-64 object-cover rounded-xl shadow-md"
+                                        />
+                                        <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity rounded-xl">
+                                            <span className="text-white font-medium">Change Image</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-indigo-400 transition-colors">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 mx-auto text-gray-400">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                                        </svg>
+                                        <h3 className="mt-2 text-gray-700 font-medium">Upload Class Cover Image</h3>
+                                        <p className="text-sm text-gray-500">Click to upload (JPG, PNG)</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </motion.div>
+                );
+            case 3:
+                return (
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="space-y-6"
+                    >
+                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Class Content</h2>
+                        
+                        <div>
+                            <label className="block text-gray-600 font-medium mb-2">Class Description:</label>
+                            <textarea
+                                name="description"
+                                value={formData.description}
+                                onChange={handleChange}
+                                required
+                                rows="4"
+                                placeholder="Describe what this class is about..."
+                                className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-indigo-600 focus:ring focus:ring-indigo-200 outline-none transition-all"
+                            />
+                        </div>
+
+                        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-5 rounded-xl border border-indigo-100">
+                            <h3 className="text-lg font-semibold text-indigo-800 mb-3 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                What Students Will Learn:
+                            </h3>
+                            <div className="flex mb-3">
+                                <input
+                                    type="text"
+                                    value={learningPoint}
+                                    onChange={(e) => setLearningPoint(e.target.value)}
+                                    placeholder="Add a learning objective..."
+                                    className="w-full p-3 border-2 border-indigo-200 rounded-l-lg focus:border-indigo-600 focus:ring focus:ring-indigo-200 outline-none"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleLearningAdd}
+                                    className="px-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-r-lg hover:from-indigo-700 hover:to-purple-700 transition duration-200"
+                                >
+                                    Add
+                                </button>
+                            </div>
+                            <ul className="space-y-2">
+                                {formData.whatYouWillLearn.map((item, index) => (
+                                    <li key={index} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm">
+                                        <span className="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-green-500">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                            </svg>
+                                            {item}
+                                        </span>
+                                        <button
+                                            onClick={() => handleLearningDelete(item)}
+                                            className="text-red-500 hover:text-red-700 p-1"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                            </svg>
+                                        </button>
+                                    </li>
+                                ))}
+                                {formData.minimumRequirements.length === 0 && (
+                                    <li className="text-gray-500 italic text-sm">No prerequisites added yet</li>
+                                )}
+                            </ul>
+                        </div>
+                    </motion.div>
+                );
+            case 4:
+                return (
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="space-y-6"
+                    >
+                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Preview & Submit</h2>
+                        
+                        <div className="relative overflow-hidden rounded-xl bg-white shadow-lg border border-gray-100">
+                            {formData.imageUrl ? (
+                                <div className="h-48 overflow-hidden">
+                                    <img 
+                                        src={formData.imageUrl} 
+                                        alt="Class Cover" 
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="h-48 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 text-white">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                                    </svg>
+                                </div>
+                            )}
+                            
+                            <div className="p-6">
+                                <div className="flex justify-between items-start">
+                                    <h3 className="text-xl font-bold text-gray-800">{formData.className || "Class Name"}</h3>
+                                    {formData.isPremium && (
+                                        <span className="px-3 py-1 bg-gradient-to-r from-amber-400 to-yellow-500 text-white text-xs font-bold rounded-full">
+                                            PREMIUM
+                                        </span>
+                                    )}
+                                </div>
+                                
+                                <div className="mt-3 flex items-center text-gray-600 text-sm">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                                    </svg>
+                                    {formData.standard || "Age Group"}
+                                </div>
+                                
+                                <div className="mt-1 flex items-center text-gray-600 text-sm">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+                                    </svg>
+                                    {formData.classType || "Class Type"}
+                                </div>
+                                
+                                {formData.classDate && (
+                                    <div className="mt-1 flex items-center text-gray-600 text-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0 2.25h.008v.008H7.5v-.008zm6.75-4.5h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V15zm0 2.25h.008v.008h-.008v-.008zm2.25-4.5h.008v.008H16.5v-.008zm0 2.25h.008v.008H16.5V15z" />
+                                        </svg>
+                                        {formatDate(formData.classDate)}
+                                    </div>
+                                )}
+                                
+                                {formData.classTime && (
+                                    <div className="mt-1 flex items-center text-gray-600 text-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        {formData.classTime}
+                                    </div>
+                                )}
+                                
+                                <div className="mt-4">
+                                    <h4 className="font-medium text-gray-800">Description:</h4>
+                                    <p className="text-gray-600 mt-1">
+                                        {formData.description || "No description provided."}
+                                    </p>
+                                </div>
+                                
+                                {formData.whatYouWillLearn.length > 0 && (
+                                    <div className="mt-4">
+                                        <h4 className="font-medium text-gray-800">What You'll Learn:</h4>
+                                        <ul className="mt-1 space-y-1">
+                                            {formData.whatYouWillLearn.map((item, index) => (
+                                                <li key={index} className="flex items-start">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-green-500 mt-1 mr-2">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                                    </svg>
+                                                    <span className="text-gray-600">{item}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                                
+                                {formData.minimumRequirements.length > 0 && (
+                                    <div className="mt-4">
+                                        <h4 className="font-medium text-gray-800">Prerequisites:</h4>
+                                        <ul className="mt-1 space-y-1">
+                                            {formData.minimumRequirements.map((item, index) => (
+                                                <li key={index} className="flex items-start">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-amber-500 mt-1 mr-2">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                                    </svg>
+                                                    <span className="text-gray-600">{item}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                                
+                                {formData.classLink && (
+                                    <div className="mt-4">
+                                        <h4 className="font-medium text-gray-800">Meeting Link:</h4>
+                                        <a href={formData.classLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 flex items-center mt-1">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                                            </svg>
+                                            Join Meeting
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        
+                        <div className="mt-6">
+                            <button
+                                type="submit"
+                                onClick={handleSubmit}
+                                disabled={isLoading}
+                                className="w-full py-4 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition duration-300 shadow-md hover:shadow-lg flex items-center justify-center"
+                            >
+                                {isLoading ? (
+                                    <svg className="animate-spin h-5 w-5 mr-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                ) : null}
+                                {isLoading ? "Publishing..." : "Publish Class"}
+                            </button>
+                            
+                            {error && (
+                                <p className="mt-2 text-red-600 text-center">
+                                    {error}
+                                </p>
+                            )}
+                        </div>
+                    </motion.div>
+                );
+            default:
+                return null;
+        }
+    };
+
+    const progressSteps = [
+        { label: "Basic Info", icon: "📝" },
+        { label: "Schedule", icon: "🗓" },
+        { label: "Content", icon: "📚" },
+        { label: "Preview", icon: "👁" }
+    ];
+
+    return !submitted ? (
+        <div className={`min-h-screen ${colors.background} py-16 px-4 sm:px-6 lg:px-8`}>
+            <div className="max-w-3xl mx-auto">
+                <div className="text-center mb-12">
+                    <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600">Create Your Class</h1>
+                    <p className="mt-3 text-xl text-gray-600">Share your knowledge with the world</p>
+                </div>
+                
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-8">
+                    <div className="p-6 sm:p-10">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex -space-x-2">
+                                {progressSteps.map((step, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => validateSection(activeSection) && setActiveSection(index + 1)}
+                                        className={`w-8 h-8 flex items-center justify-center rounded-full border-2 ${
+                                            activeSection === index + 1
+                                                ? 'border-indigo-600 bg-indigo-600 text-white'
+                                                : index + 1 < activeSection
+                                                ? 'border-green-500 bg-green-500 text-white'
+                                                : 'border-gray-300 bg-white text-gray-500'
+                                        } z-10`}
+                                        style={{ marginLeft: index === 0 ? 0 : '-8px' }}
+                                    >
+                                        {index + 1 < activeSection ? (
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                            </svg>
+                                        ) : (
+                                            <span>{index + 1}</span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                            
+                            <div className="text-sm font-medium text-gray-500">
+                                Step {activeSection} of {progressSteps.length}
+                            </div>
+                        </div>
+                        
+                        <div className="relative">
+                            <form onSubmit={(e) => e.preventDefault()}>
+                                {renderSection()}
+                            </form>
+                        </div>
+                        
+                        <div className="mt-8 flex justify-between">
+                            {activeSection > 1 ? (
+                                <button
+                                    onClick={prevSection}
+                                    className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition duration-200"
+                                >
+                                    Back
+                                </button>
+                            ) : (
+                                <div></div>
+                            )}
+                            
+                            {activeSection < 4 && (
+                                <button
+                                    onClick={nextSection}
+                                    className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition duration-200"
+                                >
+                                    Continue
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
-  
-          {/* Bio Section */}
-          <div className="mb-8 bg-white p-6 rounded-xl border border-amber-100">
-            <h3 className="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-amber-500" />
-              About Me
-            </h3>
-            <p className="text-gray-600 leading-relaxed">
-              {proctorData.bio || "Experienced educator passionate about making learning accessible and enjoyable for all students. Specialized in creating inclusive learning environments and adapting teaching methods to individual needs."}
-            </p>
-          </div>
-  
-          {/* Teaching Philosophy */}
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 shadow-sm">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800">
-              <Heart className="w-5 h-5 text-amber-500" />
-              Teaching Philosophy
-            </h3>
-            <p className="text-gray-600">
-              {proctorData.philosophy || "Every student has unique potential. My role is to create an inclusive environment where all students can thrive and achieve their learning goals."}
-            </p>
-          </div>
         </div>
-      </div>
+    ) : (
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex flex-col items-center justify-center px-4">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center">
+                <div className="w-20 h-20 bg-green-100 mx-auto rounded-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-green-600">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                
+                <h1 className="text-3xl font-bold text-gray-800 mt-6">Class Published!</h1>
+                <p className="text-gray-600 mt-2">Your class has been successfully published and is now available for students to join.</p>
+                
+                <div className="mt-12 space-y-4">
+                    <Link href="/Learn&Share/Learn">
+                        <button className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition duration-300 shadow-md hover:shadow-lg">
+                            Go to Classes
+                        </button>
+                    </Link>
+                    
+                    <button className="w-full py-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition duration-300">
+                        Share Your Class
+                    </button>
+                </div>
+            </div>
+        </div>
     );
-  };
-
-  if (!classData) return <div className='min-h-screen flex items-center justify-center'><Loader/></div>;
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-start p-4 sm:p-8 bg-gradient-to-b from-amber-50 to-white text-gray-900 font-['Poppins']">
-      {/* Hero section */}
-      <div className="w-full max-w-6xl mb-10 relative">
-        <div className="bg-gradient-to-r from-amber-500 to-amber-600 rounded-2xl p-8 shadow-xl text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-amber-400 rounded-full -mr-20 -mt-20 opacity-20"></div>
-          <div className="absolute bottom-0 left-0 w-40 h-40 bg-amber-400 rounded-full -ml-10 -mb-10 opacity-20"></div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 relative z-10 max-w-3xl">
-            {classData.className}
-          </h1>
-          <div className="flex flex-wrap gap-3 relative z-10">
-            <span className="px-3 py-1 bg-amber-100/30 backdrop-blur-sm text-white rounded-full text-sm font-medium">
-              {classData.standard}
-            </span>
-            <span className="px-3 py-1 bg-amber-100/30 backdrop-blur-sm text-white rounded-full text-sm font-medium flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" /> {classData.classDate}
-            </span>
-            <span className="px-3 py-1 bg-amber-100/30 backdrop-blur-sm text-white rounded-full text-sm font-medium flex items-center gap-1">
-              <Clock3 className="w-3.5 h-3.5" /> {classData.classTime}
-            </span>
-          </div>
-        </div>
-      </div>
-      
-      <div className="flex flex-col md:flex-row items-start w-full max-w-6xl gap-8">
-        {/* Main content */}
-        <div className="w-full md:w-2/3">
-          {/* Class image */}
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8 transform transition-transform duration-300 hover:shadow-xl">
-            <img
-              src={classData.imageUrl}
-              alt="Class Image"
-              className="w-full h-80 object-cover"
-            />
-          </div>
-
-          {/* Class details */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-800">
-              <BookOpen className="w-6 h-6 text-amber-500" />
-              Description
-            </h2>
-            <p className="text-lg text-gray-700 mb-6 leading-relaxed">
-              {classData.description}
-            </p>
-            
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-800">
-              <Target className="w-6 h-6 text-amber-500" />
-              What You Will Learn
-            </h2>
-            <ul className="mb-6">
-              {classData.whatYouWillLearn.map((item, idx) => (
-                <li key={idx} className="mb-2 flex items-start">
-                  <div className="mr-2 mt-1.5 text-amber-500">•</div>
-                  <span className="text-gray-700">{item}</span>
-                </li>
-              ))}
-            </ul>
-            
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-800">
-              <Users className="w-6 h-6 text-amber-500" />
-              Minimum Requirements
-            </h2>
-            <ul>
-              {classData.minimumRequirements.map((req, idx) => (
-                <li key={idx} className="mb-2 flex items-start">
-                  <div className="mr-2 mt-1.5 text-amber-500">•</div>
-                  <span className="text-gray-700">{req}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        {/* Sidebar */}
-        <div className="w-full md:w-1/3 mt-0 md:mt-0">
-          <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-4 border border-amber-100">
-            <div className="mb-6 pb-6 border-b border-amber-100">
-              <a 
-                href={classData.classLink} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="block w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-6 py-4 rounded-xl transition duration-200 shadow-md font-medium text-center transform transition-transform hover:translate-y-[-2px]"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="white">
-                    <path d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h480q33 0 56.5 23.5T720-720v180l160-160v440L720-420v180q0 33-23.5 56.5T640-160H160Zm0-80h480v-480H160v480Zm0 0v-480 480Z"/>
-                  </svg>
-                  Join Google Meet
-                </div>
-              </a>
-            </div>
-            
-            <div className="mb-6 pb-6 border-b border-amber-100">
-              <h3 className="text-lg font-semibold mb-4">Show Interest</h3>
-              <div className="flex items-center gap-4">
-                <Checkbox onChange={handleCheckboxChange} checked={isInterested} />
-                <span className="text-gray-700">
-                  {interestedCount} people are interested
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Rate This Class</h3>
-              {user && (
-                <div className="flex items-center">
-                  <ReactStars
-                    count={5}
-                    onChange={handleRatingChange}
-                    size={30}
-                    value={rating.userRating}
-                    half={true}
-                    color2={'#f59e0b'}
-                    disabled={rating.isSubmitting}
-                  />
-                </div>
-              )}
-              {!user && (
-                <p className="text-sm text-gray-500">Log in to rate this class</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Proctor section */}
-      <ProctorCard proctorData={proctorData} db={db} user={user} classData={classData} />
-    </div>
-  );
 };
 
-
-const Checkbox = ({ onChange, checked, disabled }) => {
-  return (
-    <StyledWrapper>
-      <div className="heart-container" title="Like">
-        <input 
-          type="checkbox" 
-          className="checkbox" 
-          id="Give-It-An-Id" 
-          onChange={onChange} 
-          checked={checked} 
-          disabled={disabled}
-        />
-        <div className="svg-container">
-          <svg viewBox="0 0 24 24" className="svg-outline" xmlns="http://www.w3.org/2000/svg">
-            <path d="M17.5,1.917a6.4,6.4,0,0,0-5.5,3.3,6.4,6.4,0,0,0-5.5-3.3A6.8,6.8,0,0,0,0,8.967c0,4.547,4.786,9.513,8.8,12.88a4.974,4.974,0,0,0,6.4,0C19.214,18.48,24,13.514,24,8.967A6.8,6.8,0,0,0,17.5,1.917Zm-3.585,18.4a2.973,2.973,0,0,1-3.83,0C4.947,16.006,2,11.87,2,8.967a4.8,4.8,0,0,1,4.5-5.05A4.8,4.8,0,0,1,11,8.967a1,1,0,0,0,2,0,4.8,4.8,0,0,1,4.5-5.05A4.8,4.8,0,0,1,22,8.967C22,11.87,19.053,16.006,13.915,20.313Z"></path>
-          </svg>
-          <svg viewBox="0 0 24 24" className="svg-filled" xmlns="http://www.w3.org/2000/svg">
-            <path d="M17.5,1.917a6.4,6.4,0,0,0-5.5,3.3,6.4,6.4,0,0,0-5.5-3.3A6.8,6.8,0,0,0,0,8.967c0,4.547,4.786,9.513,8.8,12.88a4.974,4.974,0,0,0,6.4,0C19.214,18.48,24,13.514,24,8.967A6.8,6.8,0,0,0,17.5,1.917Z"></path>
-          </svg>
-        </div>
-      </div>
-    </StyledWrapper>
-  );
-};
-
-
-const StyledWrapper = styled.div`
-  .heart-container {
-    --heart-color: rgb(245, 158, 11);
-    position: relative;
-    width: 40px;
-    height: 40px;
-    transition: transform 0.3s ease-in-out;
-  }
-
-  .heart-container .checkbox {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    z-index: 20;
-    cursor: pointer;
-  }
-
-  .heart-container .svg-container {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .heart-container .svg-outline,
-  .heart-container .svg-filled {
-    fill: var(--heart-color);
-    position: absolute;
-    width: 30px;
-    height: 30px;
-    transition: all 0.3s;
-  }
-
-  .heart-container .svg-filled {
-    animation: keyframes-svg-filled 0.5s;
-    display: none;
-    transform: scale(0);
-  }
-
-  .heart-container .checkbox:checked ~ .svg-container .svg-filled {
-    display: block;
-    transform: scale(1);
-  }
-
-  .heart-container:hover {
-    transform: scale(1.15);
-  }
-
-  @keyframes keyframes-svg-filled {
-    0% {
-      transform: scale(0);
-      opacity: 0;
-    }
-    25% {
-      transform: scale(1.2);
-      opacity: 1;
-    }
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-  }
-
-  .rating:not(:checked) > input {
-    position: absolute;
-    appearance: none;
-  }
-
-  .rating:not(:checked) > label {
-    float: right;
-    cursor: pointer;
-    font-size: 30px;
-    color: #ccc;
-    transition: all 0.2s ease;
-  }
-
-  .rating:not(:checked) > label:before {
-    content: '★';
-  }
-
-  .rating > input:checked + label:hover,
-  .rating > input:checked + label:hover ~ label,
-  .rating > input:checked ~ label:hover,
-  .rating > input:checked ~ label:hover ~ label,
-  .rating > label:hover ~ input:checked ~ label {
-    color: #f59e0b;
-    transform: scale(1.1);
-  }
-
-  .rating:not(:checked) > label:hover,
-  .rating:not(:checked) > label:hover ~ label {
-    color: #f59e0b;
-    transform: scale(1.1);
-  }
-
-  .rating > input:checked ~ label {
-    color: #f59e0b;
-  }
-`;
-
-export default ClassDetail;
+export default ClassesEntry;
